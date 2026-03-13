@@ -20,18 +20,25 @@ class PatternPredictor:
         # Map timestamps to regimes for fast lookup
         self.regime_map = self.df['regime'].to_dict()
 
-    def get_prediction(self, query_vec, query_timestamp, k=20, filter_regime=True):
+    def get_prediction(self, query_vec, query_timestamp, k=20, filter_regime=True, max_timestamp=None):
         """
         Calculates probability and expected return based on historical matches.
         """
         # 1. Get raw similarity matches (larger K because we might filter some out)
-        raw_matches = self.vdb.query(query_vec, k=k*2)
+        raw_matches = self.vdb.query(query_vec, k=k*5) # Increase K in case we filter many
         
         current_regime = self.regime_map.get(pd.to_datetime(query_timestamp), 'Unknown')
         
         filtered_matches = []
         for m in raw_matches:
             match_ts = pd.to_datetime(m['timestamp'])
+            
+            # Prevent lookahead bias and matching with itself
+            if max_timestamp is not None and match_ts >= pd.to_datetime(max_timestamp):
+                continue
+            elif max_timestamp is None and match_ts == pd.to_datetime(query_timestamp):
+                continue # Skip exact self-match if no max_timestamp provided
+                
             match_regime = self.regime_map.get(match_ts, 'Unknown')
             
             if filter_regime:
