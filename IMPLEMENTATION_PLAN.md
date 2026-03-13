@@ -9,17 +9,18 @@ This document outlines the end-to-end architecture and phased execution plan for
 *Goal: Establish the Python backend and harvest high-quality, continuous historical market data.*
 
 1. **Environment Setup**
-   - Initialize Python virtual environment (`venv`).
-   - Install core data science libraries: `pandas`, `numpy`, `scikit-learn`.
-   - Install ML and Vector libraries: `torch` (PyTorch), `faiss-cpu`.
-   - Install data retrieval tools: `ccxt` (for Binance/KuCoin API) or `yfinance`.
+   - [x] Initialize Python virtual environment (`venv`).
+   - [x] Install core data science libraries: `pandas`, `numpy`, `scikit-learn`.
+   - [x] Install ML and Vector libraries: `torch` (PyTorch), `faiss-cpu`.
+   - [x] Install data retrieval tools: `ccxt` (for Binance/KuCoin API) or `yfinance`.
 2. **Historical Data Pipeline**
-   - Build an ingestion script to pull 5-10 years of OHLCV (Open, High, Low, Close, Volume) data.
-   - **Resolution:** 6-hour candles.
-   - **Target Asset:** Start with a high-liquidity asset (e.g., BTC/USDT or SPY) to minimize noise.
+   - [x] Build an ingestion script to pull 5-10 years of OHLCV (Open, High, Low, Close, Volume) data.
+   - [x] **Resolution:** 6-hour candles.
+   - [x] **Target Asset:** Start with a high-liquidity asset (e.g., BTC/USDT or SPY) to minimize noise.
 3. **Data Sanitization**
-   - Handle missing candles (forward-fill close prices for zero-volume periods).
-   - Flag and remove extreme API outlier spikes.
+   - [x] Handle missing candles (forward-fill close prices for zero-volume periods).
+   - [x] Flag and remove extreme API outlier spikes.
+   - *Status:* **COMPLETED**. Established Python 3.12 venv, created `src/data_ingestion.py`, and successfully harvested 5 years (~7,300 candles) of BTC/USDT 6h data from Binance.
 
 ---
 
@@ -27,14 +28,15 @@ This document outlines the end-to-end architecture and phased execution plan for
 *Goal: Transform absolute dollar values into relative percentage representations to avoid the "Scale Swamp."*
 
 1. **Window Generation**
-   - Implement a rolling window function to slice the continuous time series into discrete **7-day periods** (28 candles per window).
-   - Use a stride of 1 candle (rolling forward every 6 hours).
+   - [x] Implement a rolling window function to slice the continuous time series into discrete **7-day periods** (28 candles per window).
+   - [x] Use a stride of 1 candle (rolling forward every 6 hours).
 2. **Mathematical Transformation**
-   - Convert absolute prices to **Log Returns**: `ln(Price_t / Price_t-1)`.
-   - Apply **Robust Scaling** across each window individually (Sample Normalization) to center the data while dampening the effect of flash crashes/pumps.
+   - [x] Convert absolute prices to **Log Returns**: `ln(Price_t / Price_t-1)`.
+   - [x] Apply **Robust Scaling** across each window individually (Sample Normalization) to center the data while dampening the effect of flash crashes/pumps.
 3. **Labeling the "Truth"**
-   - For every 7-day window, calculate the *forward return* (e.g., What is the maximum excursion and close price of the next 4 candles / 24 hours?).
-   - This becomes the target label for evaluating historical similarity.
+   - [x] For every 7-day window, calculate the *forward return* (e.g., What is the maximum excursion and close price of the next 4 candles / 24 hours?).
+   - [x] This becomes the target label for evaluating historical similarity.
+   - *Status:* **COMPLETED**. Created `src/feature_engineering.py`. Calculated Log Returns for OHLCV, generated 7,267 28-candle windows with 4-candle forecast horizons, and applied RobustScaler per window. Saved as `btc_6h_features.npz`.
 
 ---
 
