@@ -71,12 +71,13 @@ This document outlines the end-to-end architecture and phased execution plan for
 *Goal: Turn similar historical shapes into an actionable trading signal.*
 
 1. **Outcome Aggregation**
-   - Extract the forward returns (the "Truth" labels from Phase 2) of the Top 10 historical matches.
-   - Calculate the Probability of an Up-Move: e.g., if 8/10 matches pumped, P(Up) = 80%.
-   - Calculate Expected Return (mean of the 10 forward returns).
+   - [x] Extract the forward returns (the "Truth" labels from Phase 2) of the Top 10 historical matches.
+   - [x] Calculate the Probability of an Up-Move: e.g., if 8/10 matches pumped, P(Up) = 80%.
+   - [x] Calculate Expected Return (mean of the 10 forward returns).
 2. **Market Regime Detection (Crucial)**
-   - Implement a basic regime filter (e.g., classifying history into High-Vol/Bull, Low-Vol/Bear using VIX or simple Moving Average states).
-   - *Rule:* The system must drop historical matches that occurred in a fundamentally different macroeconomic regime than the current live market.
+   - [x] Implement a basic regime filter (e.g., classifying history into High-Vol/Bull, Low-Vol/Bear using VIX or simple Moving Average states).
+   - [x] *Rule:* The system must drop historical matches that occurred in a fundamentally different macroeconomic regime than the current live market.
+   - *Status:* **COMPLETED**. Created `src/predictor.py`. Implemented a 200-period SMA regime detector. Similarity searches are now filtered to ensure the current pattern is only compared against historical patterns from the same market regime (Bull vs Bear).
 
 ---
 
