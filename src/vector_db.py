@@ -5,7 +5,7 @@ import argparse
 from tqdm import tqdm
 
 class VectorDatabase:
-    def __init__(self, embedding_dim=128):
+    def __init__(self, embedding_dim=256):
         self.embedding_dim = embedding_dim
         # IndexFlatIP + L2 normalization = Cosine Similarity
         self.index = faiss.IndexFlatIP(embedding_dim)

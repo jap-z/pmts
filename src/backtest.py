@@ -26,9 +26,9 @@ def run_backtest(test_days=365):
     long_trades = []
     short_trades = []
     
-    # Parameters for signal generation
-    UP_PROB_THRESHOLD = 0.65
-    DOWN_PROB_THRESHOLD = 0.35
+    # Parameters for signal generation (Tuned for extremely high confidence)
+    UP_PROB_THRESHOLD = 0.80
+    DOWN_PROB_THRESHOLD = 0.20
     
     for idx in tqdm(test_indices, desc="Backtesting"):
         query_vec = embeddings[idx]
