@@ -83,7 +83,7 @@ class TSAutoencoder(nn.Module):
         reconstruction = self.decoder(emb)
         return reconstruction, emb
 
-def train_and_extract_embeddings(data_path='data/btc_6h_features.npz', epochs=500, batch_size=128, emb_dim=256):
+def train_and_extract_embeddings(data_path='data/btc_6h_features.npz', epochs=500, batch_size=128, emb_dim=256, checkpoint_dir='data/checkpoints'):
     print(f"Loading data from {data_path}...")
     data = np.load(data_path)
     X_raw = data['X']
@@ -104,10 +104,23 @@ def train_and_extract_embeddings(data_path='data/btc_6h_features.npz', epochs=50
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=20)
     
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    checkpoint_path = os.path.join(checkpoint_dir, 'ts2vec_checkpoint.pth')
+    
+    start_epoch = 0
+    if os.path.exists(checkpoint_path):
+        print(f"Loading checkpoint from {checkpoint_path}...")
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        print(f"Resuming training from epoch {start_epoch}...")
+    
     print(f"Training Time Series Autoencoder for {epochs} epochs...")
     start_time = time.time()
     
-    for epoch in range(epochs):
+    for epoch in range(start_epoch, epochs):
         model.train()
         total_loss = 0
         for batch_X, batch_Y in dataloader:
@@ -126,9 +139,21 @@ def train_and_extract_embeddings(data_path='data/btc_6h_features.npz', epochs=50
         
         if (epoch + 1) % 10 == 0 or epoch == 0:
             elapsed = time.time() - start_time
-            est_total = (elapsed / (epoch + 1)) * epochs
-            eta = est_total - elapsed
-            print(f"Epoch [{epoch+1}/{epochs}] - Loss: {avg_loss:.6f} | ETA: {eta/60:.1f} min")
+            epochs_run = epoch - start_epoch + 1
+            if epochs_run > 0:
+                est_total = (elapsed / epochs_run) * (epochs - start_epoch)
+                eta = est_total - elapsed
+                print(f"Epoch [{epoch+1}/{epochs}] - Loss: {avg_loss:.6f} | ETA: {eta/60:.1f} min")
+            
+            # Save Checkpoint
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'loss': avg_loss,
+            }, checkpoint_path)
+            print(f"Checkpoint saved at epoch {epoch+1}")
             
     # Extract Embeddings for all data
     print("Extracting semantic embeddings for the entire dataset...")
