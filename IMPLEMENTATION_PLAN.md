@@ -1,97 +1,51 @@
-# Pattern Matching Trading System (PMTS)
+# Pattern Matching Trading System (PMTS) - FinCast Edition
 ## Implementation & Engineering Roadmap
 
-This document outlines the end-to-end architecture and phased execution plan for building a semantic pattern-matching trading engine using Time Series Embeddings (TS2Vec) and Vector Similarity Search (FAISS).
+This document outlines the pivot toward utilizing the 1B parameter FinCast Foundation Model for zero-shot time-series forecasting.
 
 ---
 
 ## Phase 1: Environment & Data Ingestion
-*Goal: Establish the Python backend and harvest high-quality, continuous historical market data.*
+*Goal: Establish the Python backend and harvest historical market data.*
+- [x] Initialize Python 3.12 virtual environment.
+- [x] Build `src/data_ingestion.py` to pull 10 years of BTC/USDT 6h candles.
+- [x] Successfully harvested 12,521 candles.
 
-1. **Environment Setup**
-   - [x] Initialize Python virtual environment (`venv`).
-   - [x] Install core data science libraries: `pandas`, `numpy`, `scikit-learn`.
-   - [x] Install ML and Vector libraries: `torch` (PyTorch), `faiss-cpu`.
-   - [x] Install data retrieval tools: `ccxt` (for Binance/KuCoin API) or `yfinance`.
-2. **Historical Data Pipeline**
-   - [x] Build an ingestion script to pull 5-10 years of OHLCV (Open, High, Low, Close, Volume) data.
-   - [x] **Resolution:** 6-hour candles.
-   - [x] **Target Asset:** Start with a high-liquidity asset (e.g., BTC/USDT or SPY) to minimize noise.
-3. **Data Sanitization**
-   - [x] Handle missing candles (forward-fill close prices for zero-volume periods).
-   - [x] Flag and remove extreme API outlier spikes.
-   - *Status:* **COMPLETED**. Established Python 3.12 venv, created `src/data_ingestion.py`, and successfully harvested 5 years (~7,300 candles) of BTC/USDT 6h data from Binance.
+## Phase 2: Feature Engineering (Light)
+*Goal: Prepare data for foundation model consumption.*
+- [x] Calculated Log Returns and prepared normalized windows.
+- [x] Note: FinCast handles internal normalization, but we maintain raw CSV for inverse scaling.
 
----
-
-## Phase 2: Feature Engineering & Normalization
-*Goal: Transform absolute dollar values into relative percentage representations to avoid the "Scale Swamp."*
-
-1. **Window Generation**
-   - [x] Implement a rolling window function to slice the continuous time series into discrete **7-day periods** (28 candles per window).
-   - [x] Use a stride of 1 candle (rolling forward every 6 hours).
-2. **Mathematical Transformation**
-   - [x] Convert absolute prices to **Log Returns**: `ln(Price_t / Price_t-1)`.
-   - [x] Apply **Robust Scaling** across each window individually (Sample Normalization) to center the data while dampening the effect of flash crashes/pumps.
-3. **Labeling the "Truth"**
-   - [x] For every 7-day window, calculate the *forward return* (e.g., What is the maximum excursion and close price of the next 4 candles / 24 hours?).
-   - [x] This becomes the target label for evaluating historical similarity.
-   - *Status:* **COMPLETED**. Created `src/feature_engineering.py`. Calculated Log Returns for OHLCV, generated 7,267 28-candle windows with 4-candle forecast horizons, and applied RobustScaler per window. Saved as `btc_6h_features.npz`.
+## Phase 3: Time Series Foundation Model (FinCast)
+*Goal: Leverage a 1B parameter pre-trained transformer for zero-shot forecasting.*
+- [x] Clone official FinCast repository and install heavy dependencies (PyTorch, JAX, TensorFlow, Einops).
+- [x] Download 1B parameter weights (`v1.pth`) from HuggingFace.
+- [x] Implement inference wrapper `src/fincast_inference.py`.
+- [x] Successfully ran zero-shot inference on BTC data. Verified realistic USD price outputs via Inverse Scaling.
 
 ---
 
-## Phase 3: The Embedding Encoder (The Brain)
-*Goal: Compress the 28-candle windows into dense semantic vectors.*
-
-1. **Model Selection**
-   - [x] Implement or import a pre-trained **TS2Vec** (Time Series to Vector) model architecture in PyTorch.
-   - [x] *Alternative for rapid prototyping:* Use an established Time-Series Foundation Model (TSFM) like Chronos or Moment if API access is viable, otherwise stick to local TS2Vec.
-2. **Temporal Encoding (Time2Vec)**
-   - [x] Inject periodic sine-wave encodings so the model mathematically recognizes daily market cycles (Asian vs. NY sessions).
-3. **Encoding Generation**
-   - [x] Run all historical 7-day windows through the encoder to generate a master matrix of 320-dimensional embedding vectors.
-   - *Status:* **COMPLETED**. Created `src/encoder.py`. Built a bidirectional LSTM Autoencoder combined with a custom `Time2Vec` module for temporal awareness. Trained for 20 epochs to reconstruct the 28-candle windows. Successfully compressed all 7,267 windows into 128-dimensional vectors and saved them to `data/btc_6h_embeddings.npz`.
+## Phase 4: Foundation Backtesting
+*Goal: Prove the predictive power of the foundation model.*
+- [ ] Implement `src/backtest_fincast.py`.
+- [ ] Step through 365 days of 6h data (1,460 windows).
+- [ ] For each window, perform a blind FinCast prediction (next 24h).
+- [ ] Calculate Win Rate and PnL.
 
 ---
 
-## Phase 4: Vector Database & Similarity Search
-*Goal: Build the "Memory Bank" to instantly find historical twins.*
-
-1. **FAISS Indexing**
-   - [x] Initialize a local `faiss.IndexFlatIP` (Inner Product) or `IndexFlatL2` for exact similarity search.
-   - [x] Insert all historical embeddings into the FAISS index.
-2. **The K-NN Retrieval Engine**
-   - [x] Build the query function: Given a "Current" 7-day embedding, ask FAISS to return the Top `K=10` closest historical matches.
-   - [x] Define the distance metric (Cosine Similarity is preferred to match pattern shape regardless of absolute volatility magnitude).
-   - *Status:* **COMPLETED**. Created `src/vector_db.py`. Implemented FAISS with `IndexFlatIP` combined with L2 normalization to achieve Cosine Similarity search. Successfully indexed 7,267 vectors and verified that it can find "historical twins" in milliseconds.
+## Phase 5: Live Execution Strategy
+*Goal: Deploy the model to broadcast live signals.*
+- [ ] Define entry/exit thresholds based on FinCast quantile probabilities.
+- [ ] Wrap inference in a FastAPI server.
+- [ ] Fire "Strong Long/Short" alerts to Discord every 6 hours via OpenClaw webhook.
 
 ---
 
-## Phase 5: The Predictive Logic & Regime Filtering
-*Goal: Turn similar historical shapes into an actionable trading signal.*
-
-1. **Outcome Aggregation**
-   - [x] Extract the forward returns (the "Truth" labels from Phase 2) of the Top 10 historical matches.
-   - [x] Calculate the Probability of an Up-Move: e.g., if 8/10 matches pumped, P(Up) = 80%.
-   - [x] Calculate Expected Return (mean of the 10 forward returns).
-2. **Market Regime Detection (Crucial)**
-   - [x] Implement a basic regime filter (e.g., classifying history into High-Vol/Bull, Low-Vol/Bear using VIX or simple Moving Average states).
-   - [x] *Rule:* The system must drop historical matches that occurred in a fundamentally different macroeconomic regime than the current live market.
-   - *Status:* **COMPLETED**. Created `src/predictor.py`. Implemented a 200-period SMA regime detector. Similarity searches are now filtered to ensure the current pattern is only compared against historical patterns from the same market regime (Bull vs Bear).
+## Phase 6: Risk Management & Multi-Asset Expansion
+*Goal: Scaling the system.*
+- [ ] Simulate real-world trading costs (fees + slippage).
+- [ ] Run zero-shot backtests on ETH, SOL, and SPY to verify foundation model universality.
 
 ---
-
-## Phase 6: Backtesting & Live Simulation
-*Goal: Prove the statistical edge without risking capital.*
-
-1. **Out-of-Sample Walk-Forward Test**
-   - [x] Hide the last 1 year of data from the FAISS database.
-   - [x] Run the system chronologically through the hidden year, making predictions based only on the data available prior to that specific timestamp.
-2. **Performance Metrics**
-   - [x] Track directional accuracy (did it guess up/down correctly?).
-   - [x] Track Sharpe Ratio and Max Drawdown of the generated signals (PnL tracked).
-   - *Status:* **COMPLETED**. Created `src/backtest.py`. Executed a 1-year walk-forward backtest simulating 1,461 separate K-NN queries. The engine successfully prevented lookahead bias by strictly limiting FAISS searches to timestamps prior to the query. Baseline (untuned) results yielded a ~48% win rate with a slightly negative PnL, proving the mechanical pipeline is 100% operational and ready for hyperparameter tuning.
-
-3. **Live Webhook Integration**
-   - [ ] Once validated, wrap the Python engine in a FastAPI or Flask server.
-   - [ ] Expose an endpoint to ingest live 6-hour candles, run the embedding query, and fire a buy/sell signal to a webhook (or directly to Discord via OpenClaw).
+*Document maintained by Big Clawd - 2026-03-13*

@@ -96,7 +96,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fetch historical crypto data")
     parser.add_argument('--symbol', type=str, default='BTC/USDT', help='Trading pair symbol')
     parser.add_argument('--timeframe', type=str, default='6h', help='Candle timeframe')
-    parser.add_argument('--years', type=int, default=5, help='Years of history to fetch')
+    parser.add_argument('--years', type=int, default=10, help='Years of history to fetch')
     
     args = parser.parse_args()
     fetch_historical_data(symbol=args.symbol, timeframe=args.timeframe, years=args.years)

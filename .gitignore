@@ -13,6 +13,12 @@ env/
 data/
 *.csv
 *.parquet
+*.npz
+*.pth
+
+# Large Model Weights & External Src
+fincast_model/
+fincast_src/
 
 # IDE
 .vscode/
