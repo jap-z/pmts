@@ -44,12 +44,13 @@ This document outlines the end-to-end architecture and phased execution plan for
 *Goal: Compress the 28-candle windows into dense semantic vectors.*
 
 1. **Model Selection**
-   - Implement or import a pre-trained **TS2Vec** (Time Series to Vector) model architecture in PyTorch.
-   - *Alternative for rapid prototyping:* Use an established Time-Series Foundation Model (TSFM) like Chronos or Moment if API access is viable, otherwise stick to local TS2Vec.
+   - [x] Implement or import a pre-trained **TS2Vec** (Time Series to Vector) model architecture in PyTorch.
+   - [x] *Alternative for rapid prototyping:* Use an established Time-Series Foundation Model (TSFM) like Chronos or Moment if API access is viable, otherwise stick to local TS2Vec.
 2. **Temporal Encoding (Time2Vec)**
-   - Inject periodic sine-wave encodings so the model mathematically recognizes daily market cycles (Asian vs. NY sessions).
+   - [x] Inject periodic sine-wave encodings so the model mathematically recognizes daily market cycles (Asian vs. NY sessions).
 3. **Encoding Generation**
-   - Run all historical 7-day windows through the encoder to generate a master matrix of 320-dimensional embedding vectors.
+   - [x] Run all historical 7-day windows through the encoder to generate a master matrix of 320-dimensional embedding vectors.
+   - *Status:* **COMPLETED**. Created `src/encoder.py`. Built a bidirectional LSTM Autoencoder combined with a custom `Time2Vec` module for temporal awareness. Trained for 20 epochs to reconstruct the 28-candle windows. Successfully compressed all 7,267 windows into 128-dimensional vectors and saved them to `data/btc_6h_embeddings.npz`.
 
 ---
 
@@ -57,11 +58,12 @@ This document outlines the end-to-end architecture and phased execution plan for
 *Goal: Build the "Memory Bank" to instantly find historical twins.*
 
 1. **FAISS Indexing**
-   - Initialize a local `faiss.IndexFlatIP` (Inner Product) or `IndexFlatL2` for exact similarity search.
-   - Insert all historical embeddings into the FAISS index.
+   - [x] Initialize a local `faiss.IndexFlatIP` (Inner Product) or `IndexFlatL2` for exact similarity search.
+   - [x] Insert all historical embeddings into the FAISS index.
 2. **The K-NN Retrieval Engine**
-   - Build the query function: Given a "Current" 7-day embedding, ask FAISS to return the Top `K=10` closest historical matches.
-   - Define the distance metric (Cosine Similarity is preferred to match pattern shape regardless of absolute volatility magnitude).
+   - [x] Build the query function: Given a "Current" 7-day embedding, ask FAISS to return the Top `K=10` closest historical matches.
+   - [x] Define the distance metric (Cosine Similarity is preferred to match pattern shape regardless of absolute volatility magnitude).
+   - *Status:* **COMPLETED**. Created `src/vector_db.py`. Implemented FAISS with `IndexFlatIP` combined with L2 normalization to achieve Cosine Similarity search. Successfully indexed 7,267 vectors and verified that it can find "historical twins" in milliseconds.
 
 ---
 

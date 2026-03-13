@@ -2,4 +2,4 @@ pandas
 numpy
 ccxt
 scikit-learn
-tqdm
+tqdmtorch
