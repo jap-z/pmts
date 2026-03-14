@@ -61,8 +61,21 @@ def fetch_historical_data(symbol='BTC/USDT', timeframe='6h', years=5, output_dir
     
     # Sanitization
     print("Sanitizing data...")
+    # Map CCXT timeframe to Pandas frequency
+    tf_map = {
+        '1m': '1min',
+        '5m': '5min',
+        '15m': '15min',
+        '1h': '1h',
+        '4h': '4h',
+        '6h': '6h',
+        '12h': '12h',
+        '1d': '1D'
+    }
+    pd_freq = tf_map.get(timeframe, timeframe)
+    
     # Reindex to fill any missing candles with NaN
-    full_idx = pd.date_range(start=df.index.min(), end=df.index.max(), freq='6h')
+    full_idx = pd.date_range(start=df.index.min(), end=df.index.max(), freq=pd_freq)
     df = df.reindex(full_idx)
     
     # Forward-fill missing close prices

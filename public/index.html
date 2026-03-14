@@ -18,12 +18,46 @@
             align-items: center;
         }
         h1 { color: #38bdf8; margin-bottom: 10px; }
+        .controls-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            width: 100%;
+            max-width: 1100px;
+            box-sizing: border-box;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .control-group label {
+            font-size: 11px;
+            font-weight: 800;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .control-group input, .control-group select {
+            background: #0f172a;
+            color: #f8fafc;
+            border: 1px solid #334155;
+            padding: 8px;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 13px;
+        }
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 15px;
             width: 100%;
-            max-width: 1000px;
+            max-width: 1100px;
             margin-bottom: 20px;
         }
         .stat-card {
@@ -34,34 +68,47 @@
             border: 1px solid #334155;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
+        .stat-label { font-size: 12px; color: #94a3b8; font-weight: 600; }
         .stat-value {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 800;
             margin-top: 5px;
             color: #e2e8f0;
         }
-        .win-rate { color: #4ade80; }
-        .chart-container {
+        .charts-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
             width: 100%;
-            max-width: 1000px;
+            max-width: 1100px;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 900px) {
+            .charts-wrapper { grid-template-columns: 1fr; }
+        }
+        .chart-container {
             background: #1e293b;
             padding: 20px;
             border-radius: 12px;
             border: 1px solid #334155;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            position: relative;
-            height: 400px;
+            height: 350px;
+        }
+        .btn-container {
+            display: flex;
+            gap: 10px;
+            grid-column: 1 / -1;
+            margin-top: 10px;
         }
         button {
+            flex: 1;
             background: #38bdf8;
             color: #0f172a;
             border: none;
-            padding: 12px 24px;
-            font-size: 16px;
+            padding: 12px;
+            font-size: 14px;
             font-weight: 800;
             border-radius: 8px;
             cursor: pointer;
-            margin-bottom: 20px;
             transition: 0.2s;
         }
         button:hover { background: #7dd3fc; }
@@ -69,18 +116,18 @@
         
         .log-container {
             width: 100%;
-            max-width: 1000px;
-            margin-top: 20px;
-            height: 200px;
+            max-width: 1100px;
+            height: 180px;
             overflow-y: auto;
             background: #000;
-            padding: 10px;
+            padding: 15px;
             border-radius: 8px;
-            font-family: monospace;
-            font-size: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
             color: #10b981;
+            border: 1px solid #334155;
         }
-        .log-line { margin: 2px 0; border-bottom: 1px dashed #1e293b; padding-bottom: 2px; }
+        .log-line { margin: 2px 0; border-bottom: 1px solid #1e293b; padding-bottom: 2px; }
         .log-long { color: #4ade80; }
         .log-short { color: #f87171; }
         .log-neutral { color: #94a3b8; }
@@ -88,85 +135,168 @@
 </head>
 <body>
 
-    <h1>FinCast 1D Backtest Engine</h1>
+    <h1>FinCast Trading Simulator</h1>
     
-    <button id="startBtn" onclick="startBacktest()">START 365-DAY WALK-FORWARD TEST</button>
+    <div class="controls-container">
+        <div class="control-group">
+            <label>Market & Asset</label>
+            <div style="display: flex; gap: 5px;">
+                <select id="marketType" onchange="updateDefaultSymbol()">
+                    <option value="binance" selected>Crypto (Binance)</option>
+                    <option value="yahoo">Stocks/Cmdty (Yahoo)</option>
+                </select>
+                <select id="symbolSelect" style="width: 100%;"></select>
+            </div>
+        </div>
 
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div>Progress</div>
-            <div class="stat-value" id="progressVal">0 / 365</div>
+        <div class="control-group">
+            <label>Backtest Window</label>
+            <div style="display: flex; gap: 5px;">
+                <input type="number" id="durationVal" value="365" style="width: 60px;">
+                <select id="durationUnit">
+                    <option value="days" selected>Days</option>
+                    <option value="months">Months</option>
+                    <option value="years">Years</option>
+                </select>
+            </div>
         </div>
-        <div class="stat-card">
-            <div>Total Trades</div>
-            <div class="stat-value" id="tradesVal">0</div>
+        
+        <div class="control-group">
+            <label>Timeframe</label>
+            <select id="timeframeSelect">
+                <option value="1h">1 Hour</option>
+                <option value="4h">4 Hours</option>
+                <option value="1d" selected>1 Day</option>
+            </select>
         </div>
-        <div class="stat-card">
-            <div>Win Rate</div>
-            <div class="stat-value win-rate" id="winrateVal">0.0%</div>
+
+        <div class="control-group">
+            <label>Strategy Direction</label>
+            <select id="tradeDirection">
+                <option value="both" selected>Long & Short</option>
+                <option value="long">Long Only</option>
+                <option value="short">Short Only</option>
+            </select>
         </div>
-        <div class="stat-card">
-            <div>Cumulative PnL</div>
-            <div class="stat-value" id="pnlVal">0.00%</div>
+
+        <div class="control-group">
+            <label>Initial Capital ($)</label>
+            <input type="number" id="capitalInput" value="10000">
+        </div>
+
+        <div class="control-group">
+            <label>Leverage (x)</label>
+            <input type="number" id="leverageInput" value="5" min="1" max="100">
+        </div>
+
+        <div class="control-group">
+            <label>Stop Loss / Take Profit (%)</label>
+            <div style="display: flex; gap: 5px;">
+                <input type="number" id="slInput" value="3" step="0.5" style="width: 50%;">
+                <input type="number" id="tpInput" value="6" step="0.5" style="width: 50%;">
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Fee + Slippage (%)</label>
+            <input type="number" id="feeInput" value="0.1" step="0.01">
+        </div>
+
+        <div class="btn-container">
+            <button id="startBtn" onclick="startBacktest()">START SIMULATION</button>
+            <button id="stopBtn" onclick="stopBacktest()" style="background: #ef4444; display: none; max-width: 150px;">STOP</button>
         </div>
     </div>
 
-    <div class="chart-container">
-        <canvas id="priceChart"></canvas>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Step</div>
+            <div class="stat-value" id="progressVal">0 / ?</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Total Trades</div>
+            <div class="stat-value" id="tradesVal">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Win Rate</div>
+            <div class="stat-value" id="winrateVal" style="color: #4ade80;">0.0%</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Account Balance</div>
+            <div class="stat-value" id="balanceVal" style="color: #38bdf8;">$10,000</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Max Drawdown</div>
+            <div class="stat-value" id="drawdownVal" style="color: #f87171;">0.0%</div>
+        </div>
+    </div>
+
+    <div class="charts-wrapper">
+        <div class="chart-container">
+            <canvas id="priceChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="equityChart"></canvas>
+        </div>
     </div>
 
     <div class="log-container" id="logBox"></div>
 
     <script>
-        let chart;
+        let priceChart, equityChart;
+        let evtSource;
         const logBox = document.getElementById('logBox');
 
-        function initChart() {
-            const ctx = document.getElementById('priceChart').getContext('2d');
-            chart = new Chart(ctx, {
+        const symbols = {
+            binance: [
+                { val: 'BTC/USDT', name: 'Bitcoin (BTC)' },
+                { val: 'ETH/USDT', name: 'Ethereum (ETH)' },
+                { val: 'SOL/USDT', name: 'Solana (SOL)' },
+                { val: 'DOGE/USDT', name: 'Dogecoin (DOGE)' }
+            ],
+            yahoo: [
+                { val: '^GSPC', name: 'S&P 500 Index' },
+                { val: 'AAPL', name: 'Apple Inc.' },
+                { val: 'TSLA', name: 'Tesla, Inc.' },
+                { val: 'GC=F', name: 'Gold Futures' }
+            ]
+        };
+
+        function updateDefaultSymbol() {
+            const market = document.getElementById('marketType').value;
+            const select = document.getElementById('symbolSelect');
+            select.innerHTML = '';
+            symbols[market].forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.val;
+                opt.innerText = s.name;
+                select.appendChild(opt);
+            });
+        }
+
+        function initCharts() {
+            const pCtx = document.getElementById('priceChart').getContext('2d');
+            priceChart = new Chart(pCtx, {
                 type: 'line',
                 data: {
                     labels: [],
                     datasets: [
-                        {
-                            label: 'Context (Historical)',
-                            data: [],
-                            borderColor: '#94a3b8',
-                            borderWidth: 2,
-                            tension: 0.1,
-                            pointRadius: 0
-                        },
-                        {
-                            label: 'FinCast Prediction',
-                            data: [],
-                            borderColor: '#38bdf8',
-                            borderWidth: 2,
-                            borderDash: [5, 5],
-                            tension: 0.1,
-                            pointRadius: 3
-                        },
-                        {
-                            label: 'Actual Future Price',
-                            data: [],
-                            borderColor: '#4ade80',
-                            borderWidth: 2,
-                            tension: 0.1,
-                            pointRadius: 3
-                        }
+                        { label: 'Context', data: [], borderColor: '#94a3b8', borderWidth: 2, pointRadius: 0 },
+                        { label: 'Prediction', data: [], borderColor: '#38bdf8', borderWidth: 2, borderDash: [5, 5], pointRadius: 2 },
+                        { label: 'Actual', data: [], borderColor: '#4ade80', borderWidth: 2, pointRadius: 2 }
                     ]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    animation: { duration: 0 },
-                    scales: {
-                        x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', maxTicksLimit: 10 } },
-                        y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } }
-                    },
-                    plugins: {
-                        legend: { labels: { color: '#e2e8f0' } }
-                    }
-                }
+                options: { responsive: true, maintainAspectRatio: false, animation: false }
+            });
+
+            const eCtx = document.getElementById('equityChart').getContext('2d');
+            equityChart = new Chart(eCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{ label: 'Account Balance ($)', data: [], borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.1)', fill: true, borderWidth: 2, pointRadius: 0 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, animation: false }
             });
         }
 
@@ -175,89 +305,82 @@
             div.className = 'log-line';
             if (type === 'LONG') div.classList.add('log-long');
             if (type === 'SHORT') div.classList.add('log-short');
-            if (type === 'NEUTRAL') div.classList.add('log-neutral');
             div.innerText = msg;
             logBox.prepend(div);
         }
 
-        function startBacktest() {
-            document.getElementById('startBtn').disabled = true;
-            document.getElementById('startBtn').innerText = "RUNNING...";
-            logBox.innerHTML = '';
-            logEvent("Connecting to FinCast Engine...", "NEUTRAL");
+        function stopBacktest() {
+            if (evtSource) evtSource.close();
+            fetch('/pmts/stop').then(() => {
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').style.display = 'none';
+            });
+        }
 
-            const evtSource = new EventSource('/pmts/stream_backtest');
+        function startBacktest() {
+            const config = {
+                market: document.getElementById('marketType').value,
+                symbol: document.getElementById('symbolSelect').value,
+                duration: document.getElementById('durationVal').value,
+                unit: document.getElementById('durationUnit').value,
+                timeframe: document.getElementById('timeframeSelect').value,
+                direction: document.getElementById('tradeDirection').value,
+                capital: document.getElementById('capitalInput').value,
+                leverage: document.getElementById('leverageInput').value,
+                sl: document.getElementById('slInput').value,
+                tp: document.getElementById('tpInput').value,
+                fee: document.getElementById('feeInput').value
+            };
+
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').style.display = 'inline-block';
+            logBox.innerHTML = '';
+            
+            equityChart.data.labels = [];
+            equityChart.data.datasets[0].data = [];
+            equityChart.update();
+
+            const url = `/pmts/stream_backtest?duration=${config.duration}&unit=${config.unit}&timeframe=${config.timeframe}&direction=${config.direction}&symbol=${config.symbol}&provider=${config.market}&capital=${config.capital}&leverage=${config.leverage}&sl=${config.sl}&tp=${config.tp}&fee=${config.fee}`;
+            evtSource = new EventSource(url);
             
             evtSource.onmessage = function(event) {
                 const data = JSON.parse(event.data);
+                if (data.type === 'status') { logEvent(data.msg, "NEUTRAL"); return; }
                 
-                // Update stats
                 document.getElementById('progressVal').innerText = `${data.step} / ${data.total_steps}`;
                 document.getElementById('tradesVal').innerText = data.total_trades;
                 document.getElementById('winrateVal').innerText = `${data.win_rate.toFixed(1)}%`;
-                
-                const pnlEl = document.getElementById('pnlVal');
-                const pnlPct = data.cumulative_pnl * 100;
-                pnlEl.innerText = `${pnlPct > 0 ? '+' : ''}${pnlPct.toFixed(2)}%`;
-                pnlEl.style.color = pnlPct >= 0 ? '#4ade80' : '#f87171';
+                document.getElementById('balanceVal').innerText = `$${data.account_balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                document.getElementById('drawdownVal').innerText = `${data.max_drawdown.toFixed(1)}%`;
 
-                // Log Trade
                 if (data.trade_taken) {
-                    const result = data.won ? 'WIN' : 'LOSS';
-                    const pnlTrade = (data.trade_pnl * 100).toFixed(2);
-                    logEvent(`[${data.timestamp}] SIGNAL: ${data.signal} | Result: ${result} (${pnlTrade}%)`, data.signal);
-                } else {
-                    logEvent(`[${data.timestamp}] SIGNAL: ${data.signal} | No trade`, "NEUTRAL");
+                    const res = data.won ? 'WIN' : 'LOSS';
+                    logEvent(`[${data.timestamp}] ${data.signal} @ ${data.exit_reason}: ${res} (${(data.trade_pnl*100).toFixed(2)}%)`, data.signal);
+                    
+                    equityChart.data.labels.push(data.timestamp);
+                    equityChart.data.datasets[0].data.push(data.account_balance);
+                    equityChart.update();
                 }
 
-                // Update Chart
-                // X-axis labels
-                const allLabels = [...data.context_times, ...data.future_times];
+                priceChart.data.labels = [...data.context_times, ...data.future_times];
+                priceChart.data.datasets[0].data = [...data.context_prices, ...new Array(data.future_times.length).fill(null)];
                 
-                // Context line (ends at current time)
-                const contextData = [...data.context_prices];
-                for (let i=0; i<data.future_times.length; i++) contextData.push(null);
-                
-                // Prediction & Actual lines (starts exactly where context ends to connect the line)
-                const lastContextPrice = data.base_price;
-                const predData = [];
-                const actualData = [];
-                
-                for (let i=0; i<data.context_times.length - 1; i++) {
-                    predData.push(null);
-                    actualData.push(null);
-                }
-                
-                // Connecting point
-                predData.push(lastContextPrice);
-                actualData.push(lastContextPrice);
-                
-                // Future points
-                predData.push(...data.predicted_prices);
-                actualData.push(...data.actual_prices);
-
-                chart.data.labels = allLabels;
-                chart.data.datasets[0].data = contextData;
-                chart.data.datasets[1].data = predData;
-                chart.data.datasets[2].data = actualData;
-                chart.update();
+                const connPoint = new Array(data.context_times.length - 1).fill(null).concat([data.base_price]);
+                priceChart.data.datasets[1].data = [...connPoint, ...data.predicted_prices];
+                priceChart.data.datasets[2].data = [...connPoint, ...data.actual_prices];
+                priceChart.update();
 
                 if (data.step >= data.total_steps) {
                     evtSource.close();
-                    document.getElementById('startBtn').innerText = "BACKTEST COMPLETE";
-                    logEvent("--- BACKTEST FINISHED ---", "NEUTRAL");
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('stopBtn').style.display = 'none';
+                    logEvent("--- SIMULATION FINISHED ---", "NEUTRAL");
                 }
-            };
-
-            evtSource.onerror = function(err) {
-                console.error("EventSource failed:", err);
-                evtSource.close();
-                document.getElementById('startBtn').innerText = "ERROR - CHECK LOGS";
-                document.getElementById('startBtn').disabled = false;
             };
         }
 
-        initChart();
+        initCharts();
+        updateDefaultSymbol();
     </script>
 </body>
 </html>
