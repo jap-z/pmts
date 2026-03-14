@@ -282,7 +282,9 @@
                     labels: [],
                     datasets: [
                         { label: 'Context', data: [], borderColor: '#94a3b8', borderWidth: 2, pointRadius: 0 },
-                        { label: 'Prediction', data: [], borderColor: '#38bdf8', borderWidth: 2, borderDash: [5, 5], pointRadius: 2 },
+                        { label: 'Upper Bound (90%)', data: [], borderColor: 'rgba(56, 189, 248, 0.5)', backgroundColor: 'rgba(56, 189, 248, 0.15)', borderWidth: 1, pointRadius: 0, fill: '+1', borderDash: [2, 2] },
+                        { label: 'Lower Bound (10%)', data: [], borderColor: 'rgba(56, 189, 248, 0.5)', borderWidth: 1, pointRadius: 0, borderDash: [2, 2] },
+                        { label: 'Prediction (Mean)', data: [], borderColor: '#38bdf8', borderWidth: 2, borderDash: [5, 5], pointRadius: 2 },
                         { label: 'Actual', data: [], borderColor: '#4ade80', borderWidth: 2, pointRadius: 2 }
                     ]
                 },
@@ -366,8 +368,10 @@
                 priceChart.data.datasets[0].data = [...data.context_prices, ...new Array(data.future_times.length).fill(null)];
                 
                 const connPoint = new Array(data.context_times.length - 1).fill(null).concat([data.base_price]);
-                priceChart.data.datasets[1].data = [...connPoint, ...data.predicted_prices];
-                priceChart.data.datasets[2].data = [...connPoint, ...data.actual_prices];
+                priceChart.data.datasets[1].data = [...connPoint, ...data.q90_prices];
+                priceChart.data.datasets[2].data = [...connPoint, ...data.q10_prices];
+                priceChart.data.datasets[3].data = [...connPoint, ...data.predicted_prices];
+                priceChart.data.datasets[4].data = [...connPoint, ...data.actual_prices];
                 priceChart.update();
 
                 if (data.step >= data.total_steps) {

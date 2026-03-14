@@ -37,7 +37,6 @@ class NumpyEncoder(json.JSONEncoder):
 
 # Global model holder
 fincast_model = None
-# Track active stream IDs to allow manual stopping
 active_streams = set()
 
 def fetch_data_for_backtest(symbol, timeframe, total_candles_needed, csv_path, provider='binance'):
@@ -77,10 +76,12 @@ def fetch_data_for_backtest(symbol, timeframe, total_candles_needed, csv_path, p
         ticker = yf.Ticker(symbol)
         df = ticker.history(start=start_date, interval=yf_tf)
         df.columns = [c.lower() for c in df.columns]
+        df.index = pd.to_datetime(df.index, utc=True)
         
     df = df[~df.index.duplicated(keep='first')]
     tf_map = {'1m': '1min', '5m': '5min', '15m': '15min', '1h': '1h', '4h': '4h', '6h': '6h', '12h': '12h', '1d': '1D'}
     pd_freq = tf_map.get(timeframe, timeframe)
+    
     full_idx = pd.date_range(start=df.index.min(), end=df.index.max(), freq=pd_freq)
     df = df.reindex(full_idx)
     df['close'] = df['close'].ffill()
@@ -117,6 +118,7 @@ def get_loaded_model():
     config.load_from_compile = True
 
     fincast_model = FinCast_Inference(config)
+    print("Model initialized.")
     return fincast_model
 
 @app.route('/pmts/')
@@ -125,13 +127,11 @@ def index():
 
 @app.route('/pmts/stop')
 def stop_all():
-    global active_streams
     active_streams.clear()
     return jsonify({"status": "ok", "message": "All backtests stopped."})
 
 @app.route('/pmts/stream_backtest')
 def stream_backtest():
-    # User Configuration Params
     duration_val = int(request.args.get('duration', 365))
     duration_unit = request.args.get('unit', 'days')
     timeframe = request.args.get('timeframe', '1d')
@@ -139,7 +139,6 @@ def stream_backtest():
     symbol = request.args.get('symbol', 'BTC/USDT')
     provider = request.args.get('provider', 'binance')
     
-    # New Realistic Trading Params
     initial_capital = float(request.args.get('capital', 10000.0))
     leverage = float(request.args.get('leverage', 1.0))
     sl_pct = float(request.args.get('sl', 5.0)) / 100.0
@@ -172,12 +171,23 @@ def stream_backtest():
             horizon_len = 7
             total_candles_needed = test_steps + context_len + horizon_len + 10
             
-            yield f"data: {json.dumps({'type': 'status', 'msg': f'Fetching {total_candles_needed} candles...'})}\n\n"
+            yield f"data: {json.dumps({'type': 'status', 'msg': f'Fetching {total_candles_needed} candles of {timeframe} data...'})}\n\n"
             
             clean_symbol = symbol.replace('/', '_').replace('^', '')
             csv_path = f"data/temp_{clean_symbol}_{timeframe}.csv"
             fetch_data_for_backtest(symbol, timeframe, total_candles_needed, csv_path, provider=provider)
             
+            secondary_tf = '5m' if tf_hours >= 1 else '1m'
+            secondary_csv_path = f"data/temp_{clean_symbol}_{secondary_tf}_micro.csv"
+            sec_mult = tf_hours / (5/60 if secondary_tf == '5m' else 1/60)
+            sec_needed = int(total_candles_needed * sec_mult)
+            
+            yield f"data: {json.dumps({'type': 'status', 'msg': f'Fetching {sec_needed} candles of {secondary_tf} for micro-tick simulation...'})}\n\n"
+            fetch_data_for_backtest(symbol, secondary_tf, sec_needed, secondary_csv_path, provider=provider)
+            
+            sec_df = pd.read_csv(secondary_csv_path, index_col=0, parse_dates=True).sort_index()
+            sec_df.index = pd.to_datetime(sec_df.index, utc=True)
+
             model_wrapper = get_loaded_model()
             from data_tools.Inference_dataset import TimeSeriesDataset_SingleCSV_Inference
             from tools.inference_utils import freq_reader_inference
@@ -188,12 +198,9 @@ def stream_backtest():
                 columns=['close'], first_c_date=True, series_norm=False, dropna=True, sliding_windows=True, return_meta=True
             )
             
-            # Clean data for manual sync (High/Low for TP/SL checks)
             df_clean = pd.read_csv(csv_path).dropna(axis=0).reset_index(drop=True)
             series_close = pd.to_numeric(df_clean['close']).to_numpy(dtype=np.float32)
-            series_high = pd.to_numeric(df_clean['high']).to_numpy(dtype=np.float32)
-            series_low = pd.to_numeric(df_clean['low']).to_numpy(dtype=np.float32)
-            timestamps = pd.to_datetime(df_clean.iloc[:, 0]).tolist()
+            timestamps = pd.to_datetime(df_clean.iloc[:, 0], utc=True).tolist()
 
             if model_wrapper.inference_dataset.sliding_windows:
                 all_records = model_wrapper.inference_dataset.index_records
@@ -214,46 +221,56 @@ def stream_backtest():
                 for i, (x_ctx, x_pad, freq, _x_fut, meta) in enumerate(loader):
                     if stream_id not in active_streams: break
 
-                    yield f"data: {json.dumps({'type': 'status', 'msg': f'Processing day {i+1} / {test_steps}...'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'status', 'msg': f'Crunching math for window {i+1} / {test_steps}...'})}\n\n"
                     
                     from tools.inference_utils import get_forecasts_f
-                    preds_out, _ = get_forecasts_f(model, x_ctx, freq=freq)
+                    preds_out, full_out = get_forecasts_f(model, x_ctx, freq=freq)
+                    
                     out_np = preds_out.detach().cpu().numpy() if isinstance(preds_out, torch.Tensor) else np.asarray(preds_out)
                     if out_np.ndim == 1: out_np = out_np[None, :]
                     pred_abs = out_np[0] 
+                    
+                    full_np = full_out.detach().cpu().numpy() if isinstance(full_out, torch.Tensor) else np.asarray(full_out)
+                    q10_abs = full_np[0, :, 1]
+                    q90_abs = full_np[0, :, 9]
                     
                     m = meta[0]
                     end_idx, start_idx = int(m['window_end']), int(m['window_start'])
                     base_price = series_close[end_idx]
                     
-                    # Evaluation window
-                    future_highs = series_high[end_idx + 1 : end_idx + horizon_len + 1]
-                    future_lows = series_low[end_idx + 1 : end_idx + horizon_len + 1]
-                    future_closes = series_close[end_idx + 1 : end_idx + horizon_len + 1]
+                    entry_time = timestamps[end_idx]
+                    exit_time = timestamps[end_idx + horizon_len]
+                    
+                    actual_future_prices = series_close[end_idx + 1 : end_idx + horizon_len + 1]
+                    future_times = [str(t) for t in timestamps[end_idx + 1 : end_idx + horizon_len + 1]]
+                    
+                    micro_slice = sec_df.loc[entry_time : exit_time]
+                    micro_highs = micro_slice['high'].values
+                    micro_lows = micro_slice['low'].values
+                    micro_closes = micro_slice['close'].values
                     
                     pred_return = (pred_abs[-1] - base_price) / base_price
                     
                     trade_taken, trade_won, trade_pnl, signal, exit_reason = False, False, 0.0, "NEUTRAL", "TIMED"
                     
-                    # Logic
                     if pred_return > 0.01 and direction in ['both', 'long']:
                         trade_taken, signal = True, "LONG"
                         tp_price = base_price * (1 + tp_pct)
                         sl_price = base_price * (1 - sl_pct)
                         
-                        # Step through future path to check SL/TP
-                        for step_idx in range(len(future_highs)):
-                            if future_lows[step_idx] <= sl_price:
+                        for tick_idx in range(len(micro_highs)):
+                            if micro_lows[tick_idx] <= sl_price:
                                 trade_pnl = -sl_pct
                                 exit_reason = "STOP LOSS"
                                 break
-                            if future_highs[step_idx] >= tp_price:
+                            if micro_highs[tick_idx] >= tp_price:
                                 trade_pnl = tp_pct
                                 exit_reason = "TAKE PROFIT"
                                 trade_won = True
                                 break
                         else:
-                            trade_pnl = (future_closes[-1] - base_price) / base_price
+                            final_px = micro_closes[-1] if len(micro_closes) > 0 else actual_future_prices[-1]
+                            trade_pnl = (final_px - base_price) / base_price
                             trade_won = trade_pnl > 0
                             
                     elif pred_return < -0.01 and direction in ['both', 'short']:
@@ -261,24 +278,23 @@ def stream_backtest():
                         tp_price = base_price * (1 - tp_pct)
                         sl_price = base_price * (1 + sl_pct)
                         
-                        for step_idx in range(len(future_highs)):
-                            if future_highs[step_idx] >= sl_price:
+                        for tick_idx in range(len(micro_highs)):
+                            if micro_highs[tick_idx] >= sl_price:
                                 trade_pnl = -sl_pct
                                 exit_reason = "STOP LOSS"
                                 break
-                            if future_lows[step_idx] <= tp_price:
+                            if micro_lows[tick_idx] <= tp_price:
                                 trade_pnl = tp_pct
                                 exit_reason = "TAKE PROFIT"
                                 trade_won = True
                                 break
                         else:
-                            trade_pnl = (base_price - future_closes[-1]) / base_price
+                            final_px = micro_closes[-1] if len(micro_closes) > 0 else actual_future_prices[-1]
+                            trade_pnl = (base_price - final_px) / base_price
                             trade_won = trade_pnl > 0
 
                     if trade_taken:
-                        # Apply Leverage and Fees
                         gross_pnl = trade_pnl * leverage
-                        # Deduct fees (round trip)
                         net_pnl = gross_pnl - (fee_pct * 2 * leverage)
                         
                         account_balance *= (1 + net_pnl)
@@ -294,8 +310,11 @@ def stream_backtest():
                         'step': i + 1, 'total_steps': test_steps, 'timestamp': str(timestamps[end_idx]),
                         'base_price': base_price, 'context_times': [str(t) for t in timestamps[start_idx : end_idx + 1]][-30:], 
                         'context_prices': series_close[start_idx : end_idx + 1][-30:], 
-                        'future_times': [str(t) for t in timestamps[end_idx + 1 : end_idx + horizon_len + 1]],
-                        'actual_prices': future_closes, 'predicted_prices': pred_abs,
+                        'future_times': future_times,
+                        'actual_prices': actual_future_prices, 
+                        'predicted_prices': pred_abs,
+                        'q10_prices': q10_abs,
+                        'q90_prices': q90_abs,
                         'signal': signal, 'trade_taken': trade_taken, 'won': trade_won,
                         'trade_pnl': trade_pnl if not trade_taken else net_pnl,
                         'exit_reason': exit_reason,
@@ -304,7 +323,7 @@ def stream_backtest():
                     }, cls=NumpyEncoder)}\n\n"
         except GeneratorExit: pass
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Error in stream: {e}")
         finally:
             if stream_id in active_streams: active_streams.remove(stream_id)
             if model_wrapper and original_records: model_wrapper.inference_dataset.index_records = original_records
